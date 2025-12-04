@@ -1,5 +1,0 @@
-id SERIAL PRIMARY KEY,
-timestamp TIMESTAMP NOT NULL,
-sensor_type VARCHAR(50),  -- temperature/humidity/pressure
-value FLOAT,
-source VARCHAR(50)        -- Pi ID if needed

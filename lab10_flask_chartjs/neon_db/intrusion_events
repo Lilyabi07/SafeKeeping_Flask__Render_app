@@ -1,5 +1,0 @@
-id SERIAL PRIMARY KEY,
-timestamp TIMESTAMP NOT NULL,
-event_type VARCHAR(30),  -- motion, forced entry
-image_url TEXT,          -- google drive link
-processed BOOLEAN DEFAULT false
