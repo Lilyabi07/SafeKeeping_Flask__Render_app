@@ -1,6 +1,6 @@
 {
   "ADAFRUIT_IO_USERNAME": "BI_B",
-  "ADAFRUIT_IO_KEY": "aio_NaDA37foqkDahvORVvOuFjvXeGWT",
+  "ADAFRUIT_IO_KEY": "aio_gIcV82bYimqGDbfdxFUcyKD8L1Wd",
   
 
   "NEON_DB_URL":"psql 'postgresql://neondb_owner:npg_0RBLZ4lOQaVm@ep-wandering-base-a8jw6vo1-pooler.eastus2.azure.neon.tech/neondb?sslmode=require&channel_binding=require'",
