@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Device Control{% endblock %}
+{% block content %}
+<h1>Device Control</h1>
+
+<div class="card">
+  <h3>Actuators</h3>
+  <div id="actuatorList"></div>
+</div>
+
+<script>
+const actuators = {{ actuators|tojson }};
+function render() {
+  const container = document.getElementById('actuatorList');
+  container.innerHTML = '';
+  for(const [name, state] of Object.entries(actuators)) {
+    const div = document.createElement('div');
+    div.className = 'device-row';
+    div.innerHTML = `<strong>${name}</strong>
+      <button data-device="${name}" class="toggleBtn">${state ? 'ON' : 'OFF'}</button>`;
+    container.appendChild(div);
+  }
+
+  document.querySelectorAll('.toggleBtn').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      const device = e.target.dataset.device;
+      const newState = e.target.innerText === 'OFF' ? 1 : 0;
+      await fetch(`/api/device/${encodeURIComponent(device)}/set`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({state: newState})
+      });
+      // optimistic toggle
+      e.target.innerText = newState ? 'ON' : 'OFF';
+    });
+  });
+}
+render();
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Manage Security{% endblock %}
+{% block content %}
+<h1>Manage Security</h1>
+
+<div>
+  <label>Date: <input type="date" id="secDate"></label>
+  <button id="listBtn">List Intrusions</button>
+</div>
+
+<div id="intrusions"></div>
+
+<script>
+document.getElementById('listBtn').addEventListener('click', async ()=>{
+  const d = document.getElementById('secDate').value;
+  if(!d) return alert('Pick a date');
+  const res = await fetch('/api/security/list?date=' + d);
+  if(!res.ok) {
+    const err = await res.json();
+    return alert(JSON.stringify(err));
+  }
+  const arr = await res.json();
+  const out = document.getElementById('intrusions');
+  out.innerHTML = '';
+  if(arr.length === 0) out.innerHTML = "<p>No intrusions found</p>";
+  arr.forEach(ev=>{
+    const el = document.createElement('div');
+    el.className = 'intrusion-row';
+    el.innerHTML = `<strong>${ev.timestamp}</strong> — ${ev.event_type} 
+      ${ev.image_url ? `<a href="${ev.image_url}" target="_blank">image</a>` : ''}`;
+    out.appendChild(el);
+  });
+});
+</script>
+{% endblock %}

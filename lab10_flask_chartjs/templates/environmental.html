@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Environmental Data{% endblock %}
+{% block content %}
+<h1>Environmental Data</h1>
+<div class="controls">
+  <label>Start: <input type="date" id="start"></label>
+  <label>End: <input type="date" id="end"></label>
+  <button id="loadBtn">Load</button>
+</div>
+
+<div class="chart-container">
+  <canvas id="envChart"></canvas>
+</div>
+
+<script>
+function drawChart(payload) {
+  const ctx = document.getElementById('envChart').getContext('2d');
+  if(window.envChart) window.envChart.destroy();
+  window.envChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: payload.labels,
+      datasets: [
+        { label: 'Temperature (°C)', data: payload.temperature, tension: 0.2, fill:false },
+        { label: 'Humidity (%)', data: payload.humidity, tension: 0.2, fill:false }
+      ]
+    }
+  });
+}
+
+document.getElementById('loadBtn').addEventListener('click', async ()=>{
+  const s = document.getElementById('start').value;
+  const e = document.getElementById('end').value;
+  const params = new URLSearchParams();
+  if(s) params.set('start', s);
+  if(e) params.set('end', e);
+  const res = await fetch('/api/temperature-history?' + params.toString());
+  const payload = await res.json();
+  drawChart(payload);
+});
+</script>
+{% endblock %}

@@ -1,0 +1,219 @@
+/* ------------------------------------------ */
+/* GLOBAL BACKGROUND - Cyber Aurora Theme */
+/* ------------------------------------------ */
+html, body {
+    height: 100%;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    color: #dff7f2;
+    animation: gradientShift 16s ease infinite;
+    background: linear-gradient(-45deg, #0f5132, #007a7a, #00c4cc, #001f3f);
+    background-size: 350% 350%;
+}
+
+/* Aurora floating light patches */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 130%;
+    height: 130%;
+    pointer-events: none;
+    background: radial-gradient(circle at 30% 40%, rgba(0,255,180,0.25), transparent 65%),
+                radial-gradient(circle at 75% 75%, rgba(0,165,255,0.18), transparent 70%),
+                radial-gradient(circle at 65% 25%, rgba(0,255,210,0.22), transparent 60%);
+    animation: floatGlow 22s ease-in-out infinite alternate;
+    filter: blur(10px);
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    30% { background-position: 50% 100%; }
+    50% { background-position: 100% 50%; }
+    80% { background-position: 50% 0%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes floatGlow {
+    0%   { transform: translate(-8%, -6%) scale(1.05); }
+    50%  { transform: translate(6%, 8%) scale(1.1) rotate(2deg); }
+    100% { transform: translate(-8%, -6%) scale(1.05); }
+}
+
+/* Sensor accent update */
+.big {
+    color: #00e5ff;
+    text-shadow: 0 0 14px rgba(0,255,190,0.85);
+}
+
+
+
+.container {
+    background: transparent !important;
+    padding-top: 24px;
+}
+
+main.container {
+    padding-top: 40px;
+    padding-bottom: 40px;
+}
+
+@keyframes gradientShift {
+    0% { background-position: 0% 50%; }
+    25% { background-position: 50% 100%; }
+    50% { background-position: 100% 50%; }
+    75% { background-position: 50% 0%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* ------------------------------------------ */
+/* GLASS NAVIGATION BAR */
+/* ------------------------------------------ */
+.glass-nav {
+    background: rgba(20, 30, 46, 0.65);
+    backdrop-filter: blur(22px);
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}
+
+.navbar-brand, .nav-link {
+    color: #d7e9ff !important;
+    font-weight: 500;
+}
+
+.nav-link:hover {
+    color: #6db5ff !important;
+}
+
+.navbar-toggler {
+    border-color: rgba(255,255,255,0.4);
+}
+
+.navbar-toggler-icon {
+    filter: invert(1);
+}
+
+
+/* ------------------------------------------ */
+/* MAIN UI CARDS */
+/* ------------------------------------------ */
+.card {
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(24px);
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 22px;
+    transition: 0.35s ease;
+    color: #ecf4ff;
+}
+
+.card:hover {
+    transform: translateY(-6px);
+    backdrop-filter: blur(30px);
+    box-shadow: 0 16px 42px rgba(0,0,0,0.35);
+}
+
+/* ------------------------------------------ */
+/* SENSOR VALUE THEME */
+/* ------------------------------------------ */
+.big {
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: #66c0ff; /* Silver-blue neon accent */
+    text-shadow: 0 0 10px rgba(96,200,255,0.75);
+}
+
+/* ------------------------------------------ */
+/* GRID LAYOUT */
+/* ------------------------------------------ */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px,1fr));
+    gap: 24px;
+    margin-bottom: 20px;
+}
+
+/* ------------------------------------------ */
+/* LINKS & TEXT */
+/* ------------------------------------------ */
+a {
+    text-decoration: none;
+    color: #66c0ff;
+}
+
+a:hover {
+    color: #9cd8ff;
+    text-shadow: 0 0 6px rgba(100,200,255,0.6);
+}
+/* ---------- Dashboard enhancements ---------- */
+
+/* sensor-card small spacing */
+.sensor-card { padding: 18px; display:flex; align-items:center; }
+
+/* icon on right */
+.sensor-card .icon { color: rgba(255,255,255,0.85); }
+
+/* motion soft neon glow (option B) */
+.motion-glow {
+  box-shadow:
+    0 6px 20px rgba(102,192,255,0.08),
+    0 0 18px rgba(102,192,255,0.18),
+    inset 0 1px 0 rgba(255,255,255,0.03);
+  transform: translateY(-4px);
+  border-color: rgba(102,192,255,0.22);
+}
+
+/* subtle pulsing ring - extremely soft to avoid alarm-y feeling */
+.motion-glow::after {
+  content: '';
+  display: block;
+  position: absolute;
+  pointer-events: none;
+  inset: -6px;
+  border-radius: 18px;
+  box-shadow: 0 0 30px rgba(102,192,255,0.12);
+  opacity: 0.9;
+  animation: softPulse 1.8s infinite ease-in-out;
+}
+
+/* avoid overflow issues for ::after */
+#card-motion { position: relative; overflow: visible; }
+
+/* pulsing animation */
+@keyframes softPulse {
+  0% { transform: scale(0.96); opacity: 0.55; }
+  50% { transform: scale(1.03); opacity: 0.9; }
+  100% { transform: scale(0.96); opacity: 0.55; }
+}
+
+/* responsive tweaks */
+@media (max-width: 650px) {
+  .big { font-size: 1.6rem; }
+  .card-grid { gap: 12px; }
+}
+
+
+/* Force removal of default Bootstrap backgrounds */
+body {
+    background: transparent !important;
+}
+
+main,
+main.container,
+.container,
+.container-fluid {
+    background-color: transparent !important;
+    backdrop-filter: none !important;
+}
+
+nav.navbar,
+nav.navbar.glass-nav,
+.navbar {
+    background: rgba(20, 30, 46, 0.5) !important;
+    backdrop-filter: blur(22px) !important;
+}
+
+html {
+    background: none !important;
+}

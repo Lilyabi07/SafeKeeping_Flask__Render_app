@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}SafeKeeping — Dashboard{% endblock %}
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <h1 class="h3 mb-0">SafeKeeping Dashboard</h1>
+    <small class="text-muted">Live status & recent sensor values</small>
+  </div>
+
+  <div class="text-end">
+    <div id="lastUpdated" class="small text-muted">Updated: —</div>
+  </div>
+</div>
+
+<div class="card-grid">
+
+  <!-- Temperature -->
+  <div class="card sensor-card" id="card-temperature" role="status" aria-live="polite">
+    <div class="d-flex align-items-start justify-content-between">
+      <div>
+        <h5 class="mb-1">Temperature</h5>
+        <div class="big value" id="val-temperature">—</div>
+        <div class="small text-muted">°C</div>
+      </div>
+      <div class="icon">
+        <i class="bi bi-thermometer-half" style="font-size:1.9rem; opacity:0.9"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Humidity -->
+  <div class="card sensor-card" id="card-humidity" role="status" aria-live="polite">
+    <div class="d-flex align-items-start justify-content-between">
+      <div>
+        <h5 class="mb-1">Humidity</h5>
+        <div class="big value" id="val-humidity">—</div>
+        <div class="small text-muted">%</div>
+      </div>
+      <div class="icon">
+        <i class="bi bi-droplet" style="font-size:1.9rem; opacity:0.9"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Motion -->
+  <div class="card sensor-card" id="card-motion" role="status" aria-live="polite">
+    <div class="d-flex align-items-start justify-content-between">
+      <div>
+        <h5 class="mb-1">Motion</h5>
+        <div class="big" id="val-motion">—</div>
+        <div class="small text-muted" id="motion-note">Status</div>
+      </div>
+      <div class="icon">
+        <i class="bi bi-eye" style="font-size:1.9rem; opacity:0.9"></i>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pressure -->
+  <div class="card sensor-card" id="card-pressure" role="status" aria-live="polite">
+    <div class="d-flex align-items-start justify-content-between">
+      <div>
+        <h5 class="mb-1">Pressure</h5>
+        <div class="big value" id="val-pressure">—</div>
+        <div class="small text-muted">hPa</div>
+      </div>
+      <div class="icon">
+        <i class="bi bi-speedometer2" style="font-size:1.9rem; opacity:0.9"></i>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="card">
+  <h5>Quick Links</h5>
+  <ul class="mb-0">
+    <li><a href="{{ public_drive }}" target="_blank" rel="noopener">Daily images folder (public)</a></li>
+    <li><a href="{{ url_for('environmental') }}">Environmental data</a></li>
+  </ul>
+</div>
+
+<script>
+/*
+  Live dashboard script
+  - Polls /api/live-sensors every 5 seconds
+  - Smoothly animates numeric values
+  - Applies a subtle neon glow to motion card when motion detected (option B)
+*/
+
+const POLL_INTERVAL = 5000; // ms
+
+// Smooth number animation helper
+function animateNumber(el, newValue, decimals=1) {
+  const start = parseFloat(el.dataset.value || el.innerText.replace(/[^\d\.\-]/g, '')) || 0;
+  const end = (newValue === null || newValue === undefined) ? start : parseFloat(newValue);
+  const duration = 600;
+  const startTime = performance.now();
+  el.dataset.value = start;
+
+  function step(now) {
+    const t = Math.min((now - startTime) / duration, 1);
+    const cur = start + (end - start) * (1 - Math.cos(Math.PI * t)) / 2; // ease
+    el.innerText = (Math.round(cur * Math.pow(10, decimals)) / Math.pow(10, decimals)) || '—';
+    if (t < 1) requestAnimationFrame(step);
+    else el.dataset.value = end;
+  }
+  requestAnimationFrame(step);
+}
+
+// Update UI based on fetched data
+function updateDashboard(payload) {
+  const now = new Date();
+  document.getElementById('lastUpdated').innerText = 'Updated: ' + now.toLocaleString();
+
+  // temperature
+  if (payload.temperature !== undefined) {
+    animateNumber(document.getElementById('val-temperature'), payload.temperature, 1);
+  }
+
+  // humidity
+  if (payload.humidity !== undefined) {
+    animateNumber(document.getElementById('val-humidity'), payload.humidity, 1);
+  }
+
+  // pressure
+  if (payload.pressure !== undefined) {
+    animateNumber(document.getElementById('val-pressure'), payload.pressure, 1);
+  }
+
+  // motion (boolean or string)
+  const motionRaw = payload.motion;
+  const motionCard = document.getElementById('card-motion');
+  const motionVal = document.getElementById('val-motion');
+  const motionNote = document.getElementById('motion-note');
+
+  let motionState = '—';
+  if (motionRaw === true || motionRaw === 'true' || motionRaw === '1' || motionRaw === 1) {
+    motionState = 'Detected';
+  } else if (motionRaw === false || motionRaw === 'false' || motionRaw === '0' || motionRaw === 0) {
+    motionState = 'Clear';
+  } else if (typeof motionRaw === 'string' && motionRaw.trim().length > 0) {
+    motionState = motionRaw; // allow string messages
+  }
+
+  motionVal.innerText = motionState;
+  motionNote.innerText = motionState === 'Detected' ? 'Motion sensor triggered' : 'No motion';
+
+  // subtle glow option (B): soft neon glow when detected
+  if (motionState === 'Detected') {
+    motionCard.classList.add('motion-glow');
+  } else {
+    motionCard.classList.remove('motion-glow');
+  }
+}
+
+// Poller
+async function pollOnce() {
+  try {
+    const res = await fetch('/api/live-sensors', {cache: 'no-store'});
+    if (!res.ok) throw new Error('Network response not ok');
+    const payload = await res.json();
+    updateDashboard(payload);
+  } catch (err) {
+    console.warn('Live poll failed:', err);
+  }
+}
+
+// Start polling
+pollOnce();
+setInterval(pollOnce, POLL_INTERVAL);
+
+</script>
+
+{% endblock %}
