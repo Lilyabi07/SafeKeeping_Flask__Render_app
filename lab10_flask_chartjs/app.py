@@ -4,17 +4,26 @@ import json
 from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, request, send_from_directory, url_for
 import psycopg2
-import psycopg2.extras
+from psycopg2.extras import RealDictCursor
 import os
 
+
+app = Flask(__name__, static_folder="static", template_folder="templates")
+
 # Neon connection
-conn = psycopg2.connect(os.getenv("NEON_DB_URL"))
-conn.autocommit = True
+try:
+    conn = psycopg2.connect(os.getenv("NEON_DB_URL"))
+    conn.autocommit = True
+except Exception as e:
+    print("Initial Neon connection failed:", e)
+    conn = None
+
 
 
 @app.route("/api/sensor", methods=["POST"])
 def ingest_sensor():
     data = request.json
+    print("[API /sensor] Received:", data)
 
     sensor_type = data.get("sensor_type")
     value = data.get("value")
@@ -47,19 +56,17 @@ if os.path.exists(CFG_PATH):
     with open(CFG_PATH, "r") as f:
         CONFIG = json.load(f)
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
 
 # Adafruit IO client (server-side reads)
 aio = None
 if AIO_AVAILABLE and CONFIG.get("ADAFRUIT_IO_USERNAME") and CONFIG.get("ADAFRUIT_IO_KEY"):
     aio = AIOClient(CONFIG["ADAFRUIT_IO_USERNAME"], CONFIG["ADAFRUIT_IO_KEY"])
 
-# helper: postgres connection to Neon (cloud)
 def get_pg_conn():
-    url = CONFIG.get("NEON_DB_URL")
-    if not url:
-        raise RuntimeError("NEON_DB_URL not configured in config.json")
-    return psycopg2.connect(dsn=url, cursor_factory=psycopg2.extras.RealDictCursor)
+    return psycopg2.connect(
+        os.getenv("NEON_DB_URL"),
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
 
 # Home / Dashboard
 @app.route("/")
@@ -68,14 +75,14 @@ def home():
     live = {}
     feeds = {
         "temperature": "temperature",
-        "humidity": "Humidity",
+        "humidity": "humidity",
         "motion": "motion_feed",
-        "pressure": "Pressure"
+        "pressure": "pressure"
     }
     if aio:
         try:
             # attempt safe reads; wrap individually to avoid whole failure
-            for key, feed_name in [("temperature","temperature"), ("humidity","Humidity"), ("motion","motion_feed"), ("pressure","Pressure")]:
+            for key, feed_name in [("temperature","temperature"), ("humidity","humidity"), ("motion","motion_feed"), ("pressure","pressure")]:
                 try:
                     val = aio.receive(feed_name).value
                     if key == "motion":
@@ -127,7 +134,7 @@ def api_live_sensors():
     result = {}
     if aio:
         try:
-            for feed in ["temperature", "Humidity", "motion_feed", "Pressure"]:
+            for feed in ["temperature", "humidity", "motion_feed", "pressure"]:
                 try:
                     val = aio.receive(feed).value
                     # normalize keys
@@ -137,7 +144,7 @@ def api_live_sensors():
                         result["humidity"] = float(val)
                     elif "motion" in feed:
                         result["motion"] = int(val)
-                    elif "pressure" in feed.lower() or feed == "Pressure":
+                    elif "pressure" in feed.lower() or feed == "pressure":
                         result["pressure"] = float(val)
                 except Exception:
                     pass
@@ -149,7 +156,7 @@ def api_live_sensors():
         conn = get_pg_conn()
         cur = conn.cursor()
         cur.execute("""
-            SELECT sensor_type, value, timestamp FROM environment_readings
+            SELECT sensor_type, value, timestamp FROM sensor_readings
             WHERE timestamp > now() - interval '1 hour'
             ORDER BY timestamp DESC
             LIMIT 20
@@ -190,9 +197,9 @@ def api_temp_history():
         conn = get_pg_conn()
         cur = conn.cursor()
         cur.execute("""
-            SELECT timestamp, sensor_type, value FROM environment_readings
+            SELECT timestamp, sensor_type, value FROM sensor_readings
             WHERE timestamp BETWEEN %s AND %s
-            AND sensor_type IN ('temperature','Humidity','humidity')
+            AND sensor_type IN ('temperature','humidity')
             ORDER BY timestamp ASC
         """, (start_dt, end_dt))
         rows = cur.fetchall()
