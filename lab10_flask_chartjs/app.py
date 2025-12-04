@@ -1,29 +1,124 @@
-# app.py
 import os
 import json
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, request, send_from_directory, url_for
+from flask import Flask, render_template, jsonify, request, send_from_directory
 import psycopg2
-from psycopg2.extras import RealDictCursor
-import os
+import psycopg2.extras
 
+# Optional Adafruit IO client
+try:
+    from Adafruit_IO import Client as AIOClient
+    AIO_AVAILABLE = True
+except Exception:
+    AIO_AVAILABLE = False
+
+# ----------------------------------------------------------------------
+# FLASK APP SETUP
+# ----------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CFG_PATH = os.path.join(BASE_DIR, "config.json")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
-# Neon connection
-try:
-    conn = psycopg2.connect(os.getenv("NEON_DB_URL"))
-    conn.autocommit = True
-except Exception as e:
-    print("Initial Neon connection failed:", e)
-    conn = None
+# Load config.json (optional)
+CONFIG = {}
+if os.path.exists(CFG_PATH):
+    with open(CFG_PATH, "r") as f:
+        CONFIG = json.load(f)
+
+# ----------------------------------------------------------------------
+# DATABASE HELPERS (Neon-safe)
+# ----------------------------------------------------------------------
+def get_pg_conn():
+    """Return a NEW short-lived Neon connection (required for serverless DB)."""
+    return psycopg2.connect(
+        os.getenv("NEON_DB_URL"),
+        cursor_factory=psycopg2.extras.RealDictCursor
+    )
+
+# ----------------------------------------------------------------------
+# OPTIONAL ADAFRUIT IO CLIENT
+# ----------------------------------------------------------------------
+aio = None
+if AIO_AVAILABLE and CONFIG.get("ADAFRUIT_IO_USERNAME") and CONFIG.get("ADAFRUIT_IO_KEY"):
+    try:
+        aio = AIOClient(CONFIG["ADAFRUIT_IO_USERNAME"], CONFIG["ADAFRUIT_IO_KEY"])
+    except Exception:
+        aio = None
 
 
+# ----------------------------------------------------------------------
+# ROUTES
+# ----------------------------------------------------------------------
 
+@app.route("/")
+def home():
+    """Dashboard home showing live sensor tiles."""
+    live = {}
+
+    # Attempt to read Adafruit IO values (if configured)
+    if aio:
+        feeds = {
+            "temperature": "temperature",
+            "humidity": "humidity",
+            "motion": "motion_feed",
+            "pressure": "pressure"
+        }
+        for k, feed_name in feeds.items():
+            try:
+                v = aio.receive(feed_name).value
+                # Normalize types
+                if k == "motion":
+                    live[k] = int(v)
+                else:
+                    live[k] = float(v)
+            except Exception:
+                pass  # Non-fatal
+
+    public_drive = CONFIG.get("PUBLIC_DRIVE_FOLDER_LINK", "")
+    return render_template("home.html", live=live, public_drive=public_drive)
+
+
+@app.route("/environmental")
+def environmental():
+    return render_template("environmental.html")
+
+
+@app.route("/device-control")
+def device_control():
+    actuators = CONFIG.get("ACTUATORS", {"LEDs":0, "Buzzer":0, "Servo":0, "Camera":0})
+    return render_template("device_control.html", actuators=actuators)
+
+
+@app.route("/manage-security")
+def manage_security():
+    return render_template("manage_security.html")
+
+
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
+
+# ----------------------------------------------------------------------
+# STATIC IMAGES (optional shared drive)
+# ----------------------------------------------------------------------
+IMAGES_DIR = os.path.join(BASE_DIR, "..", "images")
+if not os.path.exists(IMAGES_DIR):
+    IMAGES_DIR = os.path.join(BASE_DIR, "static", "images")
+
+@app.route("/images/<path:filename>")
+def images(filename):
+    return send_from_directory(IMAGES_DIR, filename)
+
+
+# ----------------------------------------------------------------------
+# SENSOR INGEST FROM PI
+# ----------------------------------------------------------------------
 @app.route("/api/sensor", methods=["POST"])
 def ingest_sensor():
+    """Accept incoming sensor data from Raspberry Pi."""
     data = request.json
-    print("[API /sensor] Received:", data)
 
     sensor_type = data.get("sensor_type")
     value = data.get("value")
@@ -32,136 +127,51 @@ def ingest_sensor():
     if not sensor_type or value is None:
         return jsonify({"error": "Missing fields"}), 400
 
-    with conn.cursor() as cur:
-        cur.execute("""
-            INSERT INTO sensor_readings (timestamp, sensor_type, value, source)
-            VALUES (NOW(), %s, %s, %s)
-        """, (sensor_type, value, source))
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO sensor_readings (timestamp, sensor_type, value, source)
+                    VALUES (NOW(), %s, %s, %s)
+                """, (sensor_type, value, source))
+    except Exception as e:
+        print("Neon ingestion error:", e)
+        return jsonify({"status": "db_error"}), 500
 
     return jsonify({"status": "ok"})
 
-# optional Adafruit IO client
-try:
-    from Adafruit_IO import Client as AIOClient
-    AIO_AVAILABLE = True
-except Exception:
-    AIO_AVAILABLE = False
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# load local config
-CFG_PATH = os.path.join(BASE_DIR, "config.json")
-CONFIG = {}
-if os.path.exists(CFG_PATH):
-    with open(CFG_PATH, "r") as f:
-        CONFIG = json.load(f)
-
-
-# Adafruit IO client (server-side reads)
-aio = None
-if AIO_AVAILABLE and CONFIG.get("ADAFRUIT_IO_USERNAME") and CONFIG.get("ADAFRUIT_IO_KEY"):
-    aio = AIOClient(CONFIG["ADAFRUIT_IO_USERNAME"], CONFIG["ADAFRUIT_IO_KEY"])
-
-def get_pg_conn():
-    return psycopg2.connect(
-        os.getenv("NEON_DB_URL"),
-        cursor_factory=psycopg2.extras.RealDictCursor
-    )
-
-# Home / Dashboard
-@app.route("/")
-def home():
-    # try to get live sensor values (server-side via Adafruit IO) as tiles
-    live = {}
-    feeds = {
-        "temperature": "temperature",
-        "humidity": "humidity",
-        "motion": "motion_feed",
-        "pressure": "pressure"
-    }
-    if aio:
-        try:
-            # attempt safe reads; wrap individually to avoid whole failure
-            for key, feed_name in [("temperature","temperature"), ("humidity","humidity"), ("motion","motion_feed"), ("pressure","pressure")]:
-                try:
-                    val = aio.receive(feed_name).value
-                    if key == "motion":
-                        live[key] = int(val)
-                    else:
-                        live[key] = float(val)
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-    # public drive link if available
-    public_drive = CONFIG.get("PUBLIC_DRIVE_FOLDER_LINK", "")
-    return render_template("home.html", live=live, public_drive=public_drive)
-
-# Environmental page
-@app.route("/environmental")
-def environmental():
-    return render_template("environmental.html")
-
-# Device control
-@app.route("/device-control")
-def device_control():
-    # minimal server-side actuator list (can also query cloud DB)
-    actuators = CONFIG.get("ACTUATORS", {"LEDs":0, "Buzzer":0, "Servo":0, "Camera":0})
-    return render_template("device_control.html", actuators=actuators)
-
-# Manage security
-@app.route("/manage-security")
-def manage_security():
-    return render_template("manage_security.html")
-
-# About
-@app.route("/about")
-def about():
-    return render_template("about.html")
-
-# Serve images (if you want to host images on Flask server for preview)
-IMAGES_DIR = os.path.join(BASE_DIR, "..", "images")  # common pattern if images are on Pi shared drive
-if not os.path.exists(IMAGES_DIR):
-    IMAGES_DIR = os.path.join(BASE_DIR, "static", "images")
-@app.route("/images/<path:filename>")
-def images(filename):
-    return send_from_directory(IMAGES_DIR, filename)
-
-# API: live sensors (prefer Adafruit; fallback to cloud Neon DB latest entry)
+# ----------------------------------------------------------------------
+# LIVE SENSOR API (Adafruit first, fallback Neon)
+# ----------------------------------------------------------------------
 @app.route("/api/live-sensors")
 def api_live_sensors():
     result = {}
-    if aio:
-        try:
-            for feed in ["temperature", "humidity", "motion_feed", "pressure"]:
-                try:
-                    val = aio.receive(feed).value
-                    # normalize keys
-                    if feed.lower().startswith("temp"):
-                        result["temperature"] = float(val)
-                    elif feed.lower().startswith("humidity") or feed == "Humidity":
-                        result["humidity"] = float(val)
-                    elif "motion" in feed:
-                        result["motion"] = int(val)
-                    elif "pressure" in feed.lower() or feed == "pressure":
-                        result["pressure"] = float(val)
-                except Exception:
-                    pass
-        except Exception:
-            pass
 
-    # If any missing values, try Neon DB latest row
+    # 1) Prefer Adafruit IO live data
+    if aio:
+        feed_map = ["temperature", "humidity", "motion_feed", "pressure"]
+        for feed in feed_map:
+            try:
+                v = aio.receive(feed).value
+                key = "motion" if "motion" in feed else feed
+                result[key] = float(v) if key != "motion" else int(v)
+            except:
+                pass
+
+    # 2) Fill missing data from Neon DB
     try:
-        conn = get_pg_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT sensor_type, value, timestamp FROM sensor_readings
-            WHERE timestamp > now() - interval '1 hour'
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """)
-        rows = cur.fetchall()
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT sensor_type, value
+                    FROM sensor_readings
+                    WHERE timestamp > now() - interval '1 hour'
+                    ORDER BY timestamp DESC
+                    LIMIT 30
+                """)
+                rows = cur.fetchall()
+
         for r in rows:
             st = r["sensor_type"].lower()
             if "temp" in st and "temperature" not in result:
@@ -170,105 +180,125 @@ def api_live_sensors():
                 result["humidity"] = float(r["value"])
             if "pressure" in st and "pressure" not in result:
                 result["pressure"] = float(r["value"])
-        cur.close()
-        conn.close()
     except Exception:
         pass
 
     return jsonify(result)
 
-# API: historical temperature/humidity for date range (from Neon cloud)
+
+# ----------------------------------------------------------------------
+# HISTORICAL TEMPERATURE API
+# ----------------------------------------------------------------------
 @app.route("/api/temperature-history")
 def api_temp_history():
-    start = request.args.get("start")  # YYYY-MM-DD or full timestamp
+    start = request.args.get("start")
     end = request.args.get("end")
-    # default last 24 hours
+
     if not start or not end:
         end_dt = datetime.utcnow()
         start_dt = end_dt - timedelta(days=1)
     else:
-        start_dt = datetime.fromisoformat(start) if len(start) > 10 else datetime.fromisoformat(start + "T00:00:00")
-        end_dt = datetime.fromisoformat(end) if len(end) > 10 else datetime.fromisoformat(end + "T23:59:59")
+        start_dt = datetime.fromisoformat(start if "T" in start else start + "T00:00:00")
+        end_dt = datetime.fromisoformat(end if "T" in end else end + "T23:59:59")
 
-    labels = []
-    temps = []
-    hums = []
+    labels, temps, hums = [], [], []
+
     try:
-        conn = get_pg_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT timestamp, sensor_type, value FROM sensor_readings
-            WHERE timestamp BETWEEN %s AND %s
-            AND sensor_type IN ('temperature','humidity')
-            ORDER BY timestamp ASC
-        """, (start_dt, end_dt))
-        rows = cur.fetchall()
-        # aggregate by timestamp: simple approach - collect matching sensor rows
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT timestamp, sensor_type, value
+                    FROM sensor_readings
+                    WHERE timestamp BETWEEN %s AND %s
+                    AND sensor_type IN ('temperature','humidity')
+                    ORDER BY timestamp ASC
+                """, (start_dt, end_dt))
+
+                rows = cur.fetchall()
+
         for r in rows:
-            ts = r["timestamp"].isoformat(sep=" ")
+            ts = r["timestamp"].isoformat(" ")
             labels.append(ts)
-            if "temp" in r["sensor_type"].lower():
+            if "temp" in r["sensor_type"]:
                 temps.append(float(r["value"]))
                 hums.append(None)
             else:
-                # humidity row
-                # attempt to align: if last label equals this ts and temps has entry of None, fill appropriately
                 temps.append(None)
                 hums.append(float(r["value"]))
-        cur.close()
-        conn.close()
+
     except Exception:
-        # fallback: return empty arrays
         pass
 
-    return jsonify({"labels": labels, "temperature": temps, "humidity": hums})
+    return jsonify({
+        "labels": labels,
+        "temperature": temps,
+        "humidity": hums
+    })
 
-# API: device control - sends command to Adafruit IO as feed
+
+# ----------------------------------------------------------------------
+# DEVICE CONTROL API (Adafruit IO)
+# ----------------------------------------------------------------------
 @app.route("/api/device/<device_name>/set", methods=["POST"])
 def api_device_set(device_name):
     payload = request.get_json() or {}
-    state = payload.get("state", 0)
-    # send to Adafruit IO feed: <device_name>_control (normalized)
-    feed_name = device_name.lower().replace(" ", "_")
-    feed_send = f"{feed_name}_control"
+    state = int(bool(payload.get("state", 0)))
+
+    feed_name = f"{device_name.lower().replace(' ', '_')}_control"
     sent = False
+
     if aio:
         try:
-            aio.send(feed_send, int(bool(state)))
+            aio.send(feed_name, state)
             sent = True
         except Exception as e:
-            print("Adafruit send error:", e)
-            sent = False
-    # We still return success (UI is optimistic)
-    return jsonify({"device": device_name, "state": int(bool(state)), "sent_to_aio": sent})
+            print("Adafruit IO send error:", e)
 
-# API: security list for a date (intrusion events) from Neon
+    return jsonify({"device": device_name, "state": state, "sent_to_aio": sent})
+
+
+# ----------------------------------------------------------------------
+# SECURITY EVENT LIST (Neon)
+# ----------------------------------------------------------------------
 @app.route("/api/security/list")
 def api_security_list():
     date = request.args.get("date")
     if not date:
         return jsonify({"error": "date required (YYYY-MM-DD)"}), 400
+
     start_ts = f"{date}T00:00:00"
     end_ts = f"{date}T23:59:59"
-    try:
-        conn = get_pg_conn()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT id, timestamp, event_type, image_url, processed FROM intrusion_events
-            WHERE timestamp BETWEEN %s AND %s
-            ORDER BY timestamp DESC
-        """, (start_ts, end_ts))
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        out = []
-        for r in rows:
-            out.append({"id": r["id"], "timestamp": r["timestamp"].isoformat(sep=" "), "event_type": r["event_type"], "image_url": r["image_url"], "processed": r["processed"]})
-        return jsonify(out)
-    except Exception as e:
-        print("Neon query failed:", e)
-        return jsonify([])
 
+    out = []
+    try:
+        with get_pg_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT id, timestamp, event_type, image_url, processed
+                    FROM intrusion_events
+                    WHERE timestamp BETWEEN %s AND %s
+                    ORDER BY timestamp DESC
+                """, (start_ts, end_ts))
+
+                rows = cur.fetchall()
+
+        for r in rows:
+            out.append({
+                "id": r["id"],
+                "timestamp": r["timestamp"].isoformat(" "),
+                "event_type": r["event_type"],
+                "image_url": r["image_url"],
+                "processed": r["processed"]
+            })
+
+    except Exception as e:
+        print("Neon event query error:", e)
+
+    return jsonify(out)
+
+
+# ----------------------------------------------------------------------
+# DEVELOPMENT MODE
+# ----------------------------------------------------------------------
 if __name__ == "__main__":
-    # development server (no auth as requested)
     app.run(host="0.0.0.0", port=5000, debug=True)
