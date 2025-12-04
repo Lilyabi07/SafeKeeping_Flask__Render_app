@@ -3,8 +3,33 @@ import os
 import json
 from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, request, send_from_directory, url_for
+import psycopg2
+import psycopg2.extras
+import os
+
+# Neon connection
+conn = psycopg2.connect(os.getenv("NEON_DB_URL"))
+conn.autocommit = True
 
 
+@app.route("/api/sensor", methods=["POST"])
+def ingest_sensor():
+    data = request.json
+
+    sensor_type = data.get("sensor_type")
+    value = data.get("value")
+    source = data.get("source", "pi-001")
+
+    if not sensor_type or value is None:
+        return jsonify({"error": "Missing fields"}), 400
+
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO sensor_readings (timestamp, sensor_type, value, source)
+            VALUES (NOW(), %s, %s, %s)
+        """, (sensor_type, value, source))
+
+    return jsonify({"status": "ok"})
 
 # optional Adafruit IO client
 try:

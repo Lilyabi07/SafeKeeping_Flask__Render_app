@@ -1,0 +1,4 @@
+Flask>=2.0
+psycopg2-binary
+Adafruit-IO
+chart.js
