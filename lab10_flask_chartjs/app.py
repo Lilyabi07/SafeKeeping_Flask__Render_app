@@ -198,10 +198,10 @@ def api_temp_history():
         end_dt = datetime.utcnow()
         start_dt = end_dt - timedelta(days=1)
     else:
-        start_dt = datetime.fromisoformat(start if "T" in start else start + "T00:00:00")
-        end_dt = datetime.fromisoformat(end if "T" in end else end + "T23:59:59")
+        start_dt = datetime.fromisoformat(start + "T00:00:00")
+        end_dt = datetime.fromisoformat(end + "T23:59:59")
 
-    labels, temps, hums = [], [], []
+    timeline = {}
 
     try:
         with get_pg_conn() as conn:
@@ -218,23 +218,27 @@ def api_temp_history():
 
         for r in rows:
             ts = r["timestamp"].isoformat(" ")
-            labels.append(ts)
-            if "temp" in r["sensor_type"]:
-                temps.append(float(r["value"]))
-                hums.append(None)
-            else:
-                temps.append(None)
-                hums.append(float(r["value"]))
+            if ts not in timeline:
+                timeline[ts] = {"temperature": None, "humidity": None}
 
-    except Exception:
-        pass
+            if r["sensor_type"] == "temperature":
+                timeline[ts]["temperature"] = float(r["value"])
+            elif r["sensor_type"] == "humidity":
+                timeline[ts]["humidity"] = float(r["value"])
+
+    except Exception as e:
+        print("History query error:", e)
+
+    # reorganize into parallel arrays
+    labels = list(timeline.keys())
+    temperature = [timeline[t]["temperature"] for t in labels]
+    humidity = [timeline[t]["humidity"] for t in labels]
 
     return jsonify({
         "labels": labels,
-        "temperature": temps,
-        "humidity": hums
+        "temperature": temperature,
+        "humidity": humidity
     })
-
 
 # ----------------------------------------------------------------------
 # DEVICE CONTROL API (Adafruit IO)
