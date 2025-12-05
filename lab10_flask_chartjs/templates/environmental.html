@@ -21,15 +21,25 @@ console.log("Chart global:", window.Chart);
 <script>
 function drawChart(payload) {
   const ctx = document.getElementById('envChart').getContext('2d');
-  if(window.envChart) window.envChart.destroy();
-  window.envChart = new Chart(ctx, {
+if (window.envChart && typeof window.envChart.destroy === 'function') {
+    window.envChart.destroy();
+}  window.envChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: payload.labels,
       datasets: [
         { label: 'Temperature (°C)', data: payload.temperature, tension: 0.2, fill:false },
-        { label: 'Humidity (%)', data: payload.humidity, tension: 0.2, fill:false }
+        { label: 'Humidity (%)', data: payload.humidity, tension: 0.2, fill:false },
+        { label: 'Pressure (hPa)', data: payload.pressure, tension: 0.2, fill:false }
       ]
+    },
+     options: {
+      responsive: true,
+      maintainAspectRatio: false,
+        scales: {
+    y: { beginAtZero: false },
+    x: { ticks: { autoSkip: true } }
+        }
     }
   });
 }

@@ -187,13 +187,14 @@ def api_live_sensors():
 
 
 # ----------------------------------------------------------------------
-# HISTORICAL TEMPERATURE API
+# HISTORICAL ENVIRONMENTAL API (Temperature, Humidity, Pressure)
 # ----------------------------------------------------------------------
 @app.route("/api/temperature-history")
 def api_temp_history():
     start = request.args.get("start")
     end = request.args.get("end")
 
+    # Default: past 24 hours
     if not start or not end:
         end_dt = datetime.utcnow()
         start_dt = end_dt - timedelta(days=1)
@@ -210,7 +211,7 @@ def api_temp_history():
                     SELECT timestamp, sensor_type, value
                     FROM sensor_readings
                     WHERE timestamp BETWEEN %s AND %s
-                    AND sensor_type IN ('temperature','humidity')
+                    AND sensor_type IN ('temperature','humidity','pressure')
                     ORDER BY timestamp ASC
                 """, (start_dt, end_dt))
 
@@ -218,13 +219,23 @@ def api_temp_history():
 
         for r in rows:
             ts = r["timestamp"].isoformat(" ")
+
+            # ensure timestamp exists
             if ts not in timeline:
-                timeline[ts] = {"temperature": None, "humidity": None}
+                timeline[ts] = {
+                    "temperature": None,
+                    "humidity": None,
+                    "pressure": None
+                }
+
+            value = float(r["value"])
 
             if r["sensor_type"] == "temperature":
-                timeline[ts]["temperature"] = float(r["value"])
+                timeline[ts]["temperature"] = value
             elif r["sensor_type"] == "humidity":
-                timeline[ts]["humidity"] = float(r["value"])
+                timeline[ts]["humidity"] = value
+            elif r["sensor_type"] == "pressure":
+                timeline[ts]["pressure"] = value
 
     except Exception as e:
         print("History query error:", e)
@@ -233,11 +244,13 @@ def api_temp_history():
     labels = list(timeline.keys())
     temperature = [timeline[t]["temperature"] for t in labels]
     humidity = [timeline[t]["humidity"] for t in labels]
+    pressure = [timeline[t]["pressure"] for t in labels]
 
     return jsonify({
         "labels": labels,
         "temperature": temperature,
-        "humidity": humidity
+        "humidity": humidity,
+        "pressure": pressure
     })
 
 # ----------------------------------------------------------------------
