@@ -2,6 +2,7 @@
 {% block title %}Environmental Data{% endblock %}
 {% block content %}
 <h1>Environmental Data</h1>
+
 <div class="controls">
   <label>Start: <input type="date" id="start"></label>
   <label>End: <input type="date" id="end"></label>
@@ -12,46 +13,67 @@
   <canvas id="envChart"></canvas>
 </div>
 
-
 <script>
 console.log("Chart global:", window.Chart);
 </script>
 
-
 <script>
 function drawChart(payload) {
+
   const ctx = document.getElementById('envChart').getContext('2d');
-if (window.envChart && typeof window.envChart.destroy === 'function') {
-    window.envChart.destroy();
-}  window.envChart = new Chart(ctx, {
+
+  // Proper destroy guard
+  if (window.envChart && typeof window.envChart.destroy === "function") {
+      window.envChart.destroy();
+  }
+
+  window.envChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: payload.labels,
       datasets: [
-        { label: 'Temperature (°C)', data: payload.temperature, tension: 0.2, fill:false },
-        { label: 'Humidity (%)', data: payload.humidity, tension: 0.2, fill:false },
-        { label: 'Pressure (hPa)', data: payload.pressure, tension: 0.2, fill:false }
+        {
+          label: 'Temperature (°C)',
+          data: payload.temperature,
+          tension: 0.2,
+          fill: false
+        },
+        {
+          label: 'Humidity (%)',
+          data: payload.humidity,
+          tension: 0.2,
+          fill: false
+        },
+        {
+          label: 'Pressure (hPa)',
+          data: payload.pressure,
+          tension: 0.2,
+          fill: false
+        }
       ]
     },
-     options: {
+    options: {
       responsive: true,
       maintainAspectRatio: false,
-        scales: {
-    y: { beginAtZero: false },
-    x: { ticks: { autoSkip: true } }
-        }
+      scales: {
+        y: { beginAtZero: false },
+        x: { ticks: { autoSkip: true } }
+      }
     }
   });
 }
 
-document.getElementById('loadBtn').addEventListener('click', async ()=>{
+document.getElementById('loadBtn').addEventListener('click', async () => {
   const s = document.getElementById('start').value;
   const e = document.getElementById('end').value;
+
   const params = new URLSearchParams();
-  if(s) params.set('start', s);
-  if(e) params.set('end', e);
+  if (s) params.set('start', s);
+  if (e) params.set('end', e);
+
   const res = await fetch('/api/temperature-history?' + params.toString());
   const payload = await res.json();
+
   drawChart(payload);
 });
 </script>
