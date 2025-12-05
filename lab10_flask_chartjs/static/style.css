@@ -5,7 +5,7 @@ html, body {
     height: 100%;
     margin: 0;
     font-family: 'Inter', sans-serif;
-    color: #010a08;
+    color: #ffff;
     animation: gradientShift 18s ease infinite;
     background: linear-gradient(-45deg, #0f5132, #007a7a, #00c4cc, #001f3f);
     background-size: 400% 400%;
@@ -121,7 +121,7 @@ main.container {
 .big {
     font-size: 2.4rem;
     font-weight: 700;
-    color: #66c0ff; /* Silver-blue neon accent */
+    color: #6bbdf8; /* Silver-blue neon accent */
     text-shadow: 0 0 10px rgba(96,200,255,0.75);
 }
 
@@ -145,7 +145,7 @@ a {
 
 a:hover {
     color: #9cd8ff;
-    text-shadow: 0 0 6px rgba(100,200,255,0.6);
+    text-shadow: 0 0 6px rgba(94, 187, 238, 0.6);
 }
 /* ---------- Dashboard enhancements ---------- */
 
@@ -211,7 +211,7 @@ main.container,
 nav.navbar,
 nav.navbar.glass-nav,
 .navbar {
-    background: rgba(20, 30, 46, 0.5) !important;
+    background: rgba(25, 37, 57, 0.5) !important;
     backdrop-filter: blur(22px) !important;
 }
 
